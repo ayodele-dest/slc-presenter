@@ -7,6 +7,7 @@ files:
   - dist/**/*
   - desktop/**/*
   - server/**/*
+  - src/song-parser.js
   - build/icon.png
   - package.json
 asar: true
