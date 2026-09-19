@@ -1,0 +1,42 @@
+.schedule-list.empty-drop-zone::after {
+  content: "Drag library items here";
+  height: 72px;
+  margin: 8px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed #4a586b;
+  border-radius: 4px;
+  color: #77869a;
+  font-size: 10px;
+}
+
+.schedule-entry[draggable="true"] {
+  cursor: grab;
+}
+
+.schedule-entry[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.schedule-entry.missing {
+  border-left-color: #d29032;
+  background: #3b2d20;
+}
+
+.schedule-entry.missing small {
+  color: #efb55f;
+}
+
+.song-edit-canvas {
+  position: relative;
+}
+
+.song-edit-canvas::after {
+  content: "Slide break: type --- on a separate line";
+  position: absolute;
+  right: 10px;
+  bottom: 7px;
+  color: #8d99aa;
+  font-size: 9px;
+  pointer-events: none;
+}

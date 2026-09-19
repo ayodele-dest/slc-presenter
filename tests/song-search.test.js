@@ -1,0 +1,10 @@
+import test from'node:test';
+import assert from'node:assert/strict';
+import{createSongSearchIndex,highlightRange,normalizeSearchText,searchSongs}from'../src/song-search.js';
+const songs=[{id:'el',title:'El Shaddai',author:'',slides:[{name:'Verse 1',text:'There is nothing You cannot do!\nEl Shaddai!'},{name:'Chorus',text:'There is nothing You cannot change!\nImpossible becomes possible!'}]},{id:'other',title:'Possible',author:'El Shaddai Choir',slides:[{name:'Verse',text:'Another lyric'}]}];
+const index=createSongSearchIndex(songs);
+test('normalizes case punctuation and whitespace for search only',()=>{assert.equal(normalizeSearchText('  There’s NOTHING, You cannot change! '),'there s nothing you cannot change')});
+test('finds partial lyric phrases across every slide',()=>{for(const query of['nothing you cannot change','cannot change','nothing you','change','impossible becomes possible'])assert.equal(searchSongs(index,query)[0].id,'el')});
+test('ranks an exact title above lyric and author matches',()=>{assert.deepEqual(searchSongs(index,'El Shaddai').map(item=>item.id),['el','other'])});
+test('returns the matching lyric and slide without changing the song',()=>{const result=searchSongs(index,'cannot change')[0];assert.equal(result.matchText,'There is nothing You cannot change!');assert.equal(result.matchSlide.name,'Chorus');assert.equal(songs[0].slides[1].text,'There is nothing You cannot change!\nImpossible becomes possible!')});
+test('maps punctuation-tolerant highlights back to original text',()=>{const text='There is nothing You cannot change!';const range=highlightRange(text,'cannot change');assert.equal(text.slice(range.start,range.end),'cannot change')});

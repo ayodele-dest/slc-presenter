@@ -1,0 +1,26 @@
+appId: church.slc.presenter
+productName: SLC Presenter
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**/*
+  - desktop/**/*
+  - server/**/*
+  - build/icon.png
+  - package.json
+asar: true
+npmRebuild: false
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.ico
+  artifactName: SLC-Presenter-Setup-${version}-${arch}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  deleteAppDataOnUninstall: false
