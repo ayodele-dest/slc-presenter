@@ -1,1 +1,1 @@
-html,body,#root{width:100%;height:100%;margin:0;overflow:hidden;background:#090e17}button,input{font-family:inherit}
+html,body,#root{width:100%;height:100%;margin:0;overflow:hidden;background:#090e17}html.slc-output-page,html.slc-output-page body,html.slc-output-page #root{background:transparent}button,input{font-family:inherit}

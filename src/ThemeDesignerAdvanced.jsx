@@ -1,8 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import Icon from './Icon.jsx';
+import { validateThemeDraft } from './theme-model.js';
+import { BACKGROUND_PRESETS } from './background-presets.js';
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const handles = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
+const fontFamilies=["Arial","Arial Black","Calibri","Cambria","Candara","Century Gothic","Georgia","Inter","Montserrat","Poppins","Segoe UI","Tahoma","Times New Roman","Trebuchet MS","Verdana"];
 const samples = {
   Song: {
     Short: "Great is Your faithfulness",
@@ -30,6 +34,8 @@ const labelFor = (element) =>
 export default function ThemeDesignerAdvanced({
   value,
   media,
+  outputs = [],
+  onImportMedia,
   onCancel,
   onSave,
   renderScene,
@@ -61,7 +67,13 @@ export default function ThemeDesignerAdvanced({
     [previewOnly, setPreviewOnly] = useState(false),
     [surface, setSurface] = useState("grid"),
     [context, setContext] = useState(null),
-    [marquee, setMarquee] = useState(null);
+    [marquee, setMarquee] = useState(null),
+    [mediaPicker,setMediaPicker]=useState(false),
+    [mediaQuery,setMediaQuery]=useState(""),
+    [mediaFilter,setMediaFilter]=useState("Recent"),
+    [pickedMedia,setPickedMedia]=useState(null),
+    [mediaPickerTarget,setMediaPickerTarget]=useState("background"),
+    [saving,setSaving]=useState(false);
   const canvasRef = useRef(null),
     interaction = useRef(null),
     dragLayer = useRef(null),
@@ -76,11 +88,22 @@ export default function ThemeDesignerAdvanced({
     samples[previewMode]?.[sampleName] ||
     Object.values(samples[previewMode] || {})[0] ||
     "Preview";
+  const importPickerMedia = async () => {
+    const result = await onImportMedia?.();
+    const imported = result?.imported?.[0];
+    if (imported) {
+      setPickedMedia({ databaseId: imported.id, title: imported.title, mediaType: imported.type === "Image" ? "Image" : "Video", url: `/media/${imported.id}` });
+      setMediaFilter(imported.type === "Image" ? "Images" : "Motion");
+    }
+  };
+  const save=async()=>{if(saving)return;const{theme,errors}=validateThemeDraft(draft);if(errors.length){alert(`Theme cannot be saved yet:\n\n${errors.join('\n')}`);return}setSaving(true);try{await onSave(theme)}finally{setSaving(false)}};
+  const setCanvasSize=(width,height)=>{const xScale=width/canvasW,yScale=height/canvasH;mutate({...draft,canvasWidth:width,canvasHeight:height,elements:draft.elements.map(element=>({...element,x:Math.round(element.x*xScale),y:Math.round(element.y*yScale),width:Math.round(element.width*xScale),height:Math.round(element.height*yScale)}))})};
   const sample = {
     id: "theme-designer-preview",
     title: draft.name,
     type: previewMode,
     theme: draft,
+    pauseBackgroundVideo: true,
     slides: [
       {
         name: "Preview",
@@ -152,6 +175,8 @@ export default function ThemeDesignerAdvanced({
         name:
           type === "shape"
             ? "Background Panel"
+            : type === "text"
+              ? "Text"
             : binding === "secondary"
               ? "Reference"
               : previewMode === "Scripture"
@@ -168,6 +193,7 @@ export default function ThemeDesignerAdvanced({
         zIndex: draft.elements.length + 1,
         visible: true,
         locked: false,
+        text:type==="text"?"Text":undefined,
         style:
           type === "shape"
             ? { fill: "#173b33", border: "#000000", borderWidth: 0, radius: 0 }
@@ -198,6 +224,7 @@ export default function ThemeDesignerAdvanced({
     commit({ ...draft, elements: [...draft.elements, element] });
     setSelection([id]);
   };
+  const addImage=(item)=>{if(!item)return;const id=`image-${Date.now()}`,element={id,name:item.title||'Image',type:'image',mediaId:item.databaseId,url:item.url,x:560,y:240,width:800,height:600,rotation:0,opacity:1,zIndex:draft.elements.length+1,visible:true,locked:false,style:{fit:'contain',position:'center',radius:0,shadow:{x:0,y:4,blur:12,color:'#000000'}}};commit({...draft,elements:[...draft.elements,element]});setSelection([id])};
   const remove = () => {
     if (!selection.length) return;
     commit({
@@ -362,14 +389,20 @@ export default function ThemeDesignerAdvanced({
     if (element.locked) return;
     event.preventDefault();
     event.stopPropagation();
+    const rect = canvasRef.current.getBoundingClientRect();
+    const pointX = ((event.clientX - rect.left) * canvasW) / rect.width;
+    const pointY = ((event.clientY - rect.top) * canvasH) / rect.height;
+    const overlapping = [...draft.elements]
+      .filter((item) => item.visible !== false && !item.locked && pointX >= item.x && pointX <= item.x + item.width && pointY >= item.y && pointY <= item.y + item.height)
+      .sort((a, b) => (b.zIndex || 0) - (a.zIndex || 0));
+    const target = event.altKey && overlapping.length > 1
+      ? overlapping[(Math.max(0, overlapping.findIndex((item) => selection.includes(item.id))) + 1) % overlapping.length]
+      : element;
     const ids = event.shiftKey
-      ? [...new Set([...selection, element.id])]
-      : selection.includes(element.id)
-        ? selection
-        : [element.id];
+      ? [...new Set([...selection, target.id])]
+      : selection.length>1&&selection.includes(target.id)?selection:[target.id];
     setSelection(ids);
-    const rect = canvasRef.current.getBoundingClientRect(),
-      start = { x: event.clientX, y: event.clientY },
+    const start = { x: event.clientX, y: event.clientY },
       before = clone(draft),
       originals = new Map(
         draft.elements
@@ -377,7 +410,11 @@ export default function ThemeDesignerAdvanced({
           .map((item) => [item.id, clone(item)]),
       );
     interaction.current = { before };
+    let dragged = false;
     const move = (pointer) => {
+        if ((pointer.buttons & 1) === 0) return;
+        if (!dragged && Math.hypot(pointer.clientX - start.x, pointer.clientY - start.y) < 4) return;
+        dragged = true;
         const dx = ((pointer.clientX - start.x) * canvasW) / rect.width,
           dy = ((pointer.clientY - start.y) * canvasH) / rect.height;
         setDraft((current) => {
@@ -512,8 +549,10 @@ export default function ThemeDesignerAdvanced({
         removeEventListener("pointermove", move);
         removeEventListener("pointerup", stop);
         setGuides([]);
-        setHistory((items) => [...items.slice(-79), before]);
-        setFuture([]);
+        if (dragged) {
+          setHistory((items) => [...items.slice(-79), before]);
+          setFuture([]);
+        }
         interaction.current = null;
       };
     addEventListener("pointermove", move);
@@ -698,6 +737,10 @@ export default function ThemeDesignerAdvanced({
           <option>Full Screen</option>
           <option>Lower Third</option>
         </select>
+        <select title="Canvas size" value={`${canvasW}x${canvasH}`} onChange={event=>{const[width,height]=event.target.value.split('x').map(Number);setCanvasSize(width,height)}}>
+          {outputs.map((output,index)=>{const[width,height]=String(output.resolution||'1920×1080').split(/[×x]/).map(Number);return <option key={output.id} value={`${width}x${height}`}>Output {index+1} · {width}×{height}</option>})}
+          <option value="1920x1080">16:9 · 1920×1080</option><option value="1920x1200">16:10 · 1920×1200</option><option value="1024x768">4:3 · 1024×768</option><option value="3840x1080">Ultrawide · 3840×1080</option>
+        </select>
         <button onClick={undo} disabled={!history.length}>
           ↶ Undo
         </button>
@@ -709,21 +752,22 @@ export default function ThemeDesignerAdvanced({
         </button>
         <button
           className="primary"
-          onClick={() =>
-            onSave({ ...draft, canvasWidth: 1920, canvasHeight: 1080 })
-          }
+          onClick={save}
+          disabled={saving||!draft.name?.trim()}
         >
-          Save Changes
+          {saving?'Saving…':'Save Changes'}
         </button>
-        <button onClick={onCancel}>× Close</button>
+        <button onClick={onCancel}><Icon name="close"/>Close</button>
       </header>
       <aside className="advanced-layers">
         <div className="add-tools">
-          <button onClick={() => add("dynamic", "primary")}>＋ Text</button>
+          <button onClick={() => add("dynamic", "primary")}><Icon name="text"/>Lyrics / Scripture</button>
           <button onClick={() => add("dynamic", "secondary")}>
-            ＋ Reference
+            <Icon name="add"/>Reference
           </button>
-          <button onClick={() => add("shape", null)}>＋ Shape</button>
+          <button onClick={() => add("text", null)}><Icon name="text"/>Text</button>
+          <button onClick={() => add("shape", null)}><Icon name="shape"/>Shape</button>
+          <button onClick={()=>{setPickedMedia(null);setMediaFilter('Images');setMediaPickerTarget('element');setMediaPicker(true)}}><Icon name="media"/>Image</button>
         </div>
         <strong>BACKGROUND</strong>
         <div className="background-settings">
@@ -738,6 +782,7 @@ export default function ThemeDesignerAdvanced({
           >
             <option value="transparent">Transparent</option>
             <option value="solid">Solid Colour</option>
+            <option value="preset">Built-in Preset</option>
             <option value="image">Image</option>
             <option value="video">Video</option>
           </select>
@@ -757,39 +802,14 @@ export default function ThemeDesignerAdvanced({
               }
             />
           )}{" "}
+          {draft.background?.type === "preset" && (
+            <select value={draft.background?.presetId||BACKGROUND_PRESETS[0].id} onChange={event=>mutate({...draft,background:{type:'preset',presetId:event.target.value}})}>
+              {BACKGROUND_PRESETS.map(preset=><option key={preset.id} value={preset.id}>{preset.name} · {preset.category}</option>)}
+            </select>
+          )}{" "}
           {["image", "video"].includes(draft.background?.type) && (
             <>
-              <select
-                value={draft.background?.mediaId || ""}
-                onChange={(event) => {
-                  const item = media.find(
-                    (mediaItem) => mediaItem.databaseId === event.target.value,
-                  );
-                  mutate({
-                    ...draft,
-                    background: {
-                      ...draft.background,
-                      mediaId: item?.databaseId || "",
-                      url: item?.url || "",
-                      fit: draft.background?.fit || "cover",
-                      position: "center",
-                    },
-                  });
-                }}
-              >
-                <option value="">Choose library media…</option>
-                {media
-                  .filter((item) =>
-                    draft.background.type === "video"
-                      ? item.mediaType === "Video"
-                      : item.mediaType === "Image",
-                  )
-                  .map((item) => (
-                    <option key={item.databaseId} value={item.databaseId}>
-                      {item.title}
-                    </option>
-                  ))}
-              </select>
+              <button onClick={()=>{setPickedMedia(media.find(item=>item.databaseId===draft.background?.mediaId)||null);setMediaFilter(draft.background.type==='video'?'Motion':'Images');setMediaPickerTarget('background');setMediaPicker(true)}}>{draft.background?.mediaId?media.find(item=>item.databaseId===draft.background.mediaId)?.title||'Choose Background…':'Choose Background…'}</button>
               <select
                 value={draft.background?.fit || "cover"}
                 onChange={(event) =>
@@ -979,7 +999,7 @@ export default function ThemeDesignerAdvanced({
               />
             )}
             {!previewOnly &&
-              draft.elements.map((element) => (
+              [...draft.elements].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)).map((element) => (
                 <div
                   key={element.id}
                   className={`element-box ${selection.includes(element.id) ? "selected" : ""} ${element.locked ? "locked" : ""}`}
@@ -989,6 +1009,8 @@ export default function ThemeDesignerAdvanced({
                     width: `${(element.width / canvasW) * 100}%`,
                     height: `${(element.height / canvasH) * 100}%`,
                     transform: `rotate(${element.rotation || 0}deg)`,
+                    zIndex: 30 + (Number(element.zIndex) || 0),
+                    pointerEvents: element.locked || element.visible === false ? "none" : "auto",
                   }}
                   onPointerDown={(event) => startInteraction(event, element)}
                   onContextMenu={(event) => {
@@ -996,14 +1018,6 @@ export default function ThemeDesignerAdvanced({
                     event.stopPropagation();
                     if (!selection.includes(element.id)) setSelection([element.id]);
                     setContext({ x: event.clientX, y: event.clientY, elementId: element.id });
-                  }}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setSelection(
-                      event.shiftKey
-                        ? [...new Set([...selection, element.id])]
-                        : [element.id],
-                    );
                   }}
                 >
                   {selection.includes(element.id) &&
@@ -1188,6 +1202,11 @@ export default function ThemeDesignerAdvanced({
                   />
                 </label>
               </fieldset>
+            ) : primary.type === "image" ? (
+              <>
+                <fieldset><legend>IMAGE</legend><label>Fit<select value={primary.style?.fit||'contain'} onChange={event=>patchSelected({style:{fit:event.target.value}})}><option value="contain">Fit</option><option value="cover">Fill / Crop</option><option value="fill">Stretch</option></select></label><label>Opacity<input type="range" min="0" max="1" step=".05" value={primary.opacity??1} onChange={event=>patchSelected({opacity:Number(event.target.value)})}/></label><label>Corner radius<input type="number" min="0" value={primary.style?.radius||0} onChange={event=>patchSelected({style:{radius:Number(event.target.value)}})}/></label><button onClick={()=>{setPickedMedia(media.find(item=>item.databaseId===primary.mediaId)||null);setMediaFilter('Images');setMediaPickerTarget('element-replace');setMediaPicker(true)}}>Replace Image…</button></fieldset>
+                <fieldset><legend>EFFECTS</legend><label>Shadow X<input type="number" value={primary.style?.shadow?.x||0} onChange={event=>patchSelected({style:{shadow:{...primary.style?.shadow,x:Number(event.target.value)}}})}/></label><label>Shadow Y<input type="number" value={primary.style?.shadow?.y||0} onChange={event=>patchSelected({style:{shadow:{...primary.style?.shadow,y:Number(event.target.value)}}})}/></label><label>Shadow blur<input type="number" min="0" value={primary.style?.shadow?.blur||0} onChange={event=>patchSelected({style:{shadow:{...primary.style?.shadow,blur:Number(event.target.value)}}})}/></label><label>Shadow colour<input type="color" value={primary.style?.shadow?.color||'#000000'} onChange={event=>patchSelected({style:{shadow:{...primary.style?.shadow,color:event.target.value}}})}/></label></fieldset>
+              </>
             ) : (
               <>
                 <fieldset>
@@ -1195,6 +1214,7 @@ export default function ThemeDesignerAdvanced({
                   <label>
                     Font
                     <input
+                      list="slc-font-families"
                       value={primary.style?.fontFamily || "Arial"}
                       onChange={(event) =>
                         patchSelected({
@@ -1202,6 +1222,7 @@ export default function ThemeDesignerAdvanced({
                         })
                       }
                     />
+                    <datalist id="slc-font-families">{fontFamilies.map(font=><option key={font} value={font}/>)}</datalist>
                   </label>
                   <label>
                     Weight
@@ -1219,9 +1240,25 @@ export default function ThemeDesignerAdvanced({
                     </select>
                   </label>
                   <label>
-                    Size
+                    Text sizing
+                    <select
+                      value={primary.style?.autoFit === false ? "fixed" : "auto"}
+                      onChange={(event) =>
+                        patchSelected({
+                          style: { autoFit: event.target.value === "auto" },
+                        })
+                      }
+                    >
+                      <option value="auto">Auto fit to box</option>
+                      <option value="fixed">Fixed font size</option>
+                    </select>
+                  </label>
+                  {primary.style?.autoFit === false && <label>
+                    Font size
                     <input
                       type="number"
+                      min="12"
+                      max="300"
                       value={primary.style?.fontSize || 72}
                       onChange={(event) =>
                         patchSelected({
@@ -1229,7 +1266,7 @@ export default function ThemeDesignerAdvanced({
                         })
                       }
                     />
-                  </label>
+                  </label>}
                   <label>
                     Padding
                     <input
@@ -1243,7 +1280,7 @@ export default function ThemeDesignerAdvanced({
                       }
                     />
                   </label>
-                  <label>
+                  {primary.style?.autoFit !== false && <label>
                     Minimum size
                     <input
                       type="number"
@@ -1254,8 +1291,8 @@ export default function ThemeDesignerAdvanced({
                         })
                       }
                     />
-                  </label>
-                  <label>
+                  </label>}
+                  {primary.style?.autoFit !== false && <label>
                     Maximum size
                     <input
                       type="number"
@@ -1266,7 +1303,7 @@ export default function ThemeDesignerAdvanced({
                         })
                       }
                     />
-                  </label>
+                  </label>}
                   <label>
                     Colour
                     <input
@@ -1372,18 +1409,6 @@ export default function ThemeDesignerAdvanced({
                       }
                     />{" "}
                     Underline
-                  </label>
-                  <label className="check">
-                    <input
-                      type="checkbox"
-                      checked={primary.style?.autoFit !== false}
-                      onChange={(event) =>
-                        patchSelected({
-                          style: { autoFit: event.target.checked },
-                        })
-                      }
-                    />{" "}
-                    Auto Fit
                   </label>
                 </fieldset>
                 <fieldset>
@@ -1565,6 +1590,7 @@ export default function ThemeDesignerAdvanced({
           ))}
         </fieldset>
       </aside>
+      {mediaPicker&&<div className="theme-media-picker" onPointerDown={event=>event.target===event.currentTarget&&setMediaPicker(false)}><section><header><div><strong>{mediaPickerTarget==='background'?'Choose Background':'Choose Image Layer'}</strong><small>Shared Media Library</small></div><button onClick={()=>setMediaPicker(false)} aria-label="Close"><Icon name="close"/></button></header><label className="media-picker-search"><Icon name="search"/><input autoFocus value={mediaQuery} onChange={event=>setMediaQuery(event.target.value)} placeholder="Search media…"/></label><nav>{(mediaPickerTarget==='background'?['Recent','Images','Motion']:['Recent','Images']).map(filter=><button key={filter} className={mediaFilter===filter?'active':''} onClick={()=>setMediaFilter(filter)}>{filter}</button>)}</nav><div className="media-picker-grid">{media.filter(item=>(mediaPickerTarget!=='background'&&item.mediaType!=='Image'?false:mediaFilter==='Images'?item.mediaType==='Image':mediaFilter==='Motion'?item.mediaType==='Video':true)&&`${item.title} ${item.mediaKind||item.mediaType}`.toLowerCase().includes(mediaQuery.toLowerCase())).map(item=><button key={item.databaseId} className={pickedMedia?.databaseId===item.databaseId?'selected':''} onClick={()=>setPickedMedia(item)}><span>{item.mediaType==='Image'?<img src={item.url} alt=""/>:<video src={item.url} muted preload="metadata"/>}{item.mediaType==='Video'&&<i><Icon name="play"/></i>}</span><strong>{item.title}</strong><small>{item.mediaKind||item.mediaType}</small></button>)}</div><footer><button onClick={importPickerMedia}><Icon name="import"/>Import Media</button><span/><button onClick={()=>setMediaPicker(false)}>Cancel</button><button className="primary" disabled={!pickedMedia} onClick={()=>{if(mediaPickerTarget==='background')mutate({...draft,background:{...draft.background,type:pickedMedia.mediaType==='Video'?'video':'image',mediaId:pickedMedia.databaseId,url:pickedMedia.url,fit:draft.background?.fit||'cover',position:'center'}});else if(mediaPickerTarget==='element-replace')patchSelected({mediaId:pickedMedia.databaseId,url:pickedMedia.url,name:primary?.name||pickedMedia.title});else addImage(pickedMedia);setMediaPicker(false)}}>Select</button></footer></section></div>}
     </div>
   );
 }

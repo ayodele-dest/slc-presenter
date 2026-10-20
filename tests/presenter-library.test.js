@@ -44,6 +44,19 @@ test('persists manual Scripture and text presentations',()=>{
   }finally{library.close();rmSync(directory,{recursive:true,force:true})}
 });
 
+test('persists native presentation slide design and reports library health',()=>{
+  const directory=mkdtempSync(join(tmpdir(),'slc-presenter-native-presentation-'));
+  const library=openPresenterLibrary(join(directory,'presenter.sqlite'));
+  try{
+    const saved=library.saveDocument({kind:'Presentation',title:'Sunday Notices',slides:[{name:'Welcome',title:'Welcome Home',body:'We are glad you are here',imageMediaId:'image-1',imageUrl:'/media/image-1',imageFit:'fill',background:{type:'solid',color:'#163c31'}},{name:'Image',imageUrl:'/media/image-2',background:{type:'image',mediaId:'image-3',url:'/media/image-3',fit:'cover'}}]});
+    assert.equal(saved.slides[0].text,'Welcome Home\nWe are glad you are here');
+    assert.equal(saved.slides[0].imageFit,'fill');
+    assert.equal(saved.slides[0].background.color,'#163c31');
+    assert.equal(saved.slides[1].background.mediaId,'image-3');
+    assert.deepEqual(library.health(),{database:'ready',songs:0,documents:1,media:0,translations:0});
+  }finally{library.close();rmSync(directory,{recursive:true,force:true})}
+});
+
 test('creates, updates, and reopens complete services',()=>{
   const directory=mkdtempSync(join(tmpdir(),'slc-presenter-services-'));
   const library=openPresenterLibrary(join(directory,'presenter.sqlite'));
@@ -54,6 +67,20 @@ test('creates, updates, and reopens complete services',()=>{
     const updated=library.saveService({id:created.id,name:'Sunday Celebration',items:[...created.items,{id:'scripture-1',title:'Genesis 1:1',type:'Scripture'}]});
     assert.equal(updated.items.length,2);
     assert.equal(library.getService(created.id).name,'Sunday Celebration');
+  }finally{library.close();rmSync(directory,{recursive:true,force:true})}
+});
+
+test('saved services resolve updated native presentations and protect references',()=>{
+  const directory=mkdtempSync(join(tmpdir(),'slc-presenter-linked-presentation-'));
+  const library=openPresenterLibrary(join(directory,'presenter.sqlite'));
+  try{
+    const presentation=library.saveDocument({kind:'Presentation',title:'Offering',slides:[{name:'Slide 1',title:'Give',body:'Bank details'}]});
+    const service=library.saveService({name:'Sunday',items:[{id:`doc-${presentation.id}`,databaseId:presentation.id,title:presentation.title,type:'Presentation',slides:presentation.slides}]});
+    library.saveDocument({id:presentation.id,kind:'Presentation',title:'Offering Updated',slides:[{name:'Slide 1',title:'Give Online',body:'Updated details'}]});
+    const reopened=library.getService(service.id);
+    assert.equal(reopened.items[0].title,'Offering Updated');
+    assert.equal(reopened.items[0].slides[0].text,'Give Online\nUpdated details');
+    assert.throws(()=>library.deleteDocument(presentation.id),/used by saved service/i);
   }finally{library.close();rmSync(directory,{recursive:true,force:true})}
 });
 
@@ -93,6 +120,8 @@ test('imports and browses a structured Bible translation',()=>{
     assert.equal(translation.code,'TB');
     assert.deepEqual(library.listBibleBooks(translation.id).map(item=>item.book),['Genesis','Exodus']);
     assert.equal(library.listBibleVerses(translation.id,'Genesis',1)[1].verse,2);
+    const matches=library.searchBible(translation.id,'beginning earth',5);
+    assert.equal(matches[0].reference,'Genesis 1:1');assert.equal(matches[0].source,'local');
   }finally{library.close();rmSync(directory,{recursive:true,force:true})}
 });
 
@@ -123,12 +152,16 @@ test('stores independent image and video library records',()=>{
     assert.equal(motion.type,'Motion Background');
     assert.equal(motion.loop,1);assert.equal(motion.muted,1);
     assert.equal(motion.duration,12.5);assert.equal(motion.width,1920);assert.equal(motion.height,1080);
+    const unavailable=library.updateMedia(video.id,{playback_status:'unavailable',playback_error:'Playback unavailable on this system'});
+    assert.equal(unavailable.playback_status,'unavailable');
+    assert.equal(unavailable.playback_error,'Playback unavailable on this system');
     const service=library.saveService({name:'Media Service',items:[{id:'media-db-video-1',databaseId:video.id,title:video.title,type:'Media',mediaType:'Video',url:'/media/video-1'}]});
     assert.equal(library.getService(service.id).items[0].missing,true);
     assert.equal(library.getService(service.id).items[0].detail,'Missing media');
     assert.equal(library.getService(service.id).items[0].mediaType,'Video');
     assert.equal(library.getService(service.id).items[0].mediaKind,'Motion Background');
     assert.equal(library.getService(service.id).items[0].loop,true);
+    assert.equal(library.getService(service.id).items[0].playbackStatus,'unavailable');
     assert.equal(library.deleteMedia(video.id),true);
   }finally{library.close();rmSync(directory,{recursive:true,force:true})}
 });
@@ -140,12 +173,17 @@ test('creates a default theme and persists reusable theme layouts',()=>{
     const defaults=library.listThemes();
     assert.equal(defaults.length,1);assert.equal(defaults[0].isDefault,true);
     assert.equal(defaults[0].canvasWidth,1920);assert.equal(defaults[0].background.type,'solid');
+    assert.equal(library.getThemeDefaults().songThemeId,'');
     const saved=library.saveTheme({name:'Broadcast Scripture',contentType:'Scripture',layoutType:'Lower Third',canvasWidth:1920,canvasHeight:1080,background:{type:'transparent'},elements:[{id:'verse',type:'dynamic',binding:'primary',x:120,y:790,width:1300,height:130,style:{fontSize:54,color:'#ffffff'}}]});
     assert.equal(saved.layoutType,'Lower Third');assert.equal(saved.background.type,'transparent');
     assert.equal(library.listThemes().length,2);
     assert.equal(library.setThemeDefault('Scripture',saved.id).scriptureThemeId,saved.id);
-    assert.equal(library.getThemeDefaults().songThemeId,'slc-default-theme');
+    assert.equal(library.setThemeDefault('Presentation',saved.id).presentationThemeId,saved.id);
+    assert.equal(library.setThemeDefault('General',saved.id).generalThemeId,saved.id);
+    assert.equal(library.getThemeDefaults().songThemeId,'');
+    assert.throws(()=>library.deleteTheme(saved.id),/content default/i);
+    library.setThemeDefault('General',defaults[0].id);library.setThemeDefault('Scripture',defaults[0].id);library.setThemeDefault('Presentation',defaults[0].id);
     assert.equal(library.deleteTheme(saved.id),true);
-    assert.throws(()=>library.deleteTheme(defaults[0].id),/default theme/i);
+    assert.throws(()=>library.deleteTheme(defaults[0].id),/(default|built-in) theme/i);
   }finally{library.close();rmSync(directory,{recursive:true,force:true})}
 });

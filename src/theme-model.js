@@ -1,0 +1,11 @@
+const finite=(value,fallback)=>Number.isFinite(Number(value))?Number(value):fallback;
+const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
+
+export function normalizeThemeDraft(input={}){
+  const canvasWidth=clamp(Math.round(finite(input.canvasWidth,1920)),320,7680),canvasHeight=clamp(Math.round(finite(input.canvasHeight,1080)),240,4320),seen=new Set();
+  const elements=(Array.isArray(input.elements)?input.elements:[]).map((source,index)=>{let id=String(source.id||`element-${index+1}`);while(seen.has(id))id=`${id}-${index+1}`;seen.add(id);const width=clamp(Math.round(finite(source.width,320)),20,canvasWidth),height=clamp(Math.round(finite(source.height,120)),20,canvasHeight),x=clamp(Math.round(finite(source.x,0)),0,canvasWidth-width),y=clamp(Math.round(finite(source.y,0)),0,canvasHeight-height),type=['dynamic','text','shape','image'].includes(source.type)?source.type:'text';return{...source,id,type,name:String(source.name||'Layer').trim()||'Layer',x,y,width,height,rotation:finite(source.rotation,0),opacity:clamp(finite(source.opacity,1),0,1),zIndex:finite(source.zIndex,index+1),visible:source.visible!==false,locked:Boolean(source.locked),style:{...(source.style||{})}}});
+  const background=['transparent','solid','image','video'].includes(input.background?.type)?input.background:{type:'solid',color:'#000000'};
+  return{...input,name:String(input.name||'').trim(),canvasWidth,canvasHeight,contentType:['All','Song','Scripture','Presentation'].includes(input.contentType)?input.contentType:'All',layoutType:input.layoutType==='Lower Third'?'Lower Third':'Full Screen',background:{...background},elements};
+}
+
+export function validateThemeDraft(input){const theme=normalizeThemeDraft(input),errors=[];if(!theme.name)errors.push('Enter a theme name.');if(!theme.elements.length)errors.push('Add at least one layer.');if(theme.background.type==='image'&&!theme.background.url)errors.push('Choose an image background or change the background type.');if(theme.background.type==='video'&&!theme.background.url)errors.push('Choose a video background or change the background type.');for(const element of theme.elements)if(element.type==='image'&&!element.url)errors.push(`Choose media for the “${element.name}” image layer.`);return{theme,errors};}

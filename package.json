@@ -1,12 +1,42 @@
 {
   "name": "slc-presenter",
-  "version": "0.1.2",
+  "version": "0.1.8",
   "private": true,
   "type": "module",
   "description": "Offline church presentation software",
+  "author": "SLC",
   "main": "desktop/main.js",
+  "build": {
+    "productName": "SLC Presenter",
+    "artifactName": "${productName} Setup ${version}.${ext}",
+    "directories": {
+      "output": "installer"
+    },
+    "electronDist": "node_modules/electron/dist",
+    "files": [
+      "dist/index.html",
+      "dist/assets/**/*",
+      "desktop/**/*",
+      "server/**/*",
+      "src/song-parser.js",
+      "build/icon.png",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**"
+    ],
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "SLC Presenter",
+      "uninstallDisplayName": "SLC Presenter"
+    }
+  },
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 3000",
+    "prototype": "vite --host 127.0.0.1 --port 3000 --open /presenter?prototype=1",
     "build": "vite build",
     "desktop": "npm run build && electron .",
     "test": "node --test tests/*.test.js",
@@ -14,6 +44,8 @@
     "dist:win": "npm run build && electron-builder --win --x64 --publish never"
   },
   "dependencies": {
+    "ffmpeg-static": "^5.3.0",
+    "lucide-react": "^1.52.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

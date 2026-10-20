@@ -1,0 +1,92 @@
+/* Final alignment pass for the compact operator workspace. */
+.preview-heading,.live-heading{
+  height:48px;
+  min-height:48px;
+  display:grid;
+  grid-template-columns:minmax(150px,1fr) auto auto;
+  align-items:center;
+  padding-inline:14px;
+  gap:16px;
+}
+
+.preview-heading>.slc-floating-select:first-of-type{margin-left:auto}
+.preview-heading>.slc-floating-select:last-child,.live-heading>.slc-floating-select:last-child{grid-column:3}
+
+.library-splitter button{
+  display:grid!important;
+  place-items:center!important;
+  justify-content:center!important;
+  align-items:center!important;
+  gap:0!important;
+  line-height:1;
+}
+
+.library-splitter button>.slc-icon{
+  display:block;
+  place-self:center;
+}
+
+.library-tabs label{
+  align-items:center;
+  justify-content:flex-start;
+}
+
+.library-tabs label>.slc-icon{
+  display:block;
+  align-self:center;
+}
+
+.add-schedule{
+  align-items:center!important;
+  justify-content:center!important;
+  text-align:center;
+}
+
+.presenter-tool.primary{color:#17100b!important;text-shadow:0 1px rgba(255,255,255,.2)}
+.presenter-tool.primary>.slc-icon{color:#17100b!important;stroke-width:2.7}
+
+.scripture-workspace{grid-template-rows:40px minmax(0,1fr)}
+.scripture-mode-tabs{height:40px;align-items:stretch;padding:0 8px;border-radius:0!important}
+.scripture-mode-tabs button{height:40px;border-radius:0!important}
+.scripture-reference-inline{width:min(470px,48%);margin-left:auto;display:flex;align-items:center;gap:10px;padding:0 12px}
+.scripture-reference-inline>.slc-icon{color:var(--slc-brand-orange)}
+.scripture-reference-inline input{width:100%;height:30px;padding:0 12px!important}
+.scripture-reference-inline span{flex:none;color:var(--slc-error);font-size:11px}
+.bible-browser{grid-template-rows:minmax(0,1fr) var(--control-lg)!important}
+
+.quick-song-editor{grid-template-rows:48px 76px minmax(0,1fr) 46px}
+.quick-song-fields{gap:14px;padding:10px 14px}
+.quick-song-fields label{gap:6px;font-size:10px}
+.quick-song-fields input{height:36px;padding-inline:12px}
+
+/* Selected settings pages use a full-row tint without a one-sided marker. */
+.settings-body nav button.active{
+  border:0!important;
+  background:var(--soft-accent-subtle);
+}
+
+/* Compound searches own the focus ring; their nested inputs remain seamless. */
+.settings-search input,
+.library-tabs label input,
+.media-picker-search input{
+  border:0!important;
+  outline:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+
+.settings-search:focus-within,
+.library-tabs label:focus-within,
+.media-picker-search:focus-within{
+  border-color:var(--slc-brand-orange)!important;
+  box-shadow:0 0 0 2px rgba(255,102,0,.17)!important;
+}
+
+.library-area{grid-template-rows:48px minmax(0,1fr)}
+.library-tabs{
+  height:48px;
+  padding:6px;
+  gap:6px;
+}
+.library-tabs button{height:36px;padding:0 12px}
+.library-tabs label{height:36px}

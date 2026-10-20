@@ -1,0 +1,35 @@
+.slc-icon{
+  width:14px;
+  height:14px;
+  min-width:14px;
+  display:inline-block;
+  vertical-align:middle;
+  flex:0 0 auto;
+  color:currentColor;
+}
+
+:root{--icon-label-gap:12px}
+
+button:has(>.slc-icon),
+label:has(>.slc-icon){
+  display:inline-flex;
+  align-items:center;
+  gap:var(--icon-label-gap);
+}
+
+button>.slc-icon,
+label>.slc-icon,
+.presenter-tool>.slc-icon,
+.slc-floating-select>button>.slc-icon,
+.slc-floating-select-menu button>span .slc-icon{margin:0}
+
+.presenter-tool,
+.file-menu button,
+.song-context-menu button,
+.theme-context-menu button,
+.library-tabs label,
+.settings-search,
+.settings-back,
+.settings-secondary{gap:var(--icon-label-gap)!important}
+
+button.icon-only:has(>.slc-icon){justify-content:center;gap:0!important}
