@@ -31,6 +31,50 @@ test('rejects songs without a title or lyrics',()=>{
   }finally{library.close();rmSync(directory,{recursive:true,force:true})}
 });
 
+test('persists folders, collections, and their item assignments',()=>{
+  const directory=mkdtempSync(join(tmpdir(),'slc-presenter-organization-'));
+  const path=join(directory,'presenter.sqlite');
+  let library=openPresenterLibrary(path);
+  try{
+    const value={folders:[{id:'folder-1',name:'Sunday Songs',tab:'Songs'}],collections:[{id:'collection-1',name:'Christmas',tab:'Songs'}],folderAssignments:{'Songs:song-1':'folder-1'},collectionAssignments:{'collection-1':['Songs:song-1']}};
+    assert.deepEqual(library.saveLibraryOrganization(value),value);
+    library.close();library=openPresenterLibrary(path);
+    assert.deepEqual(library.getLibraryOrganization(),value);
+  }finally{library.close();rmSync(directory,{recursive:true,force:true})}
+});
+
+test('persists empty media folders before any media is imported',()=>{
+  const directory=mkdtempSync(join(tmpdir(),'slc-presenter-empty-media-folders-'));
+  const path=join(directory,'presenter.sqlite');
+  let library=openPresenterLibrary(path);
+  try{
+    const value={folders:[],collections:[{id:'media-adverts',name:'Adverts',tab:'Media'},{id:'media-praise',name:'Praise',tab:'Media'}],folderAssignments:{},collectionAssignments:{'media-adverts':[],'media-praise':[]}};
+    assert.equal(library.listMedia().length,0);
+    library.saveLibraryOrganization(value);
+    library.close();library=openPresenterLibrary(path);
+    assert.equal(library.listMedia().length,0);
+    assert.deepEqual(library.getLibraryOrganization(),value);
+  }finally{library.close();rmSync(directory,{recursive:true,force:true})}
+});
+
+test('survives repeated folder, theme, and media persistence updates',()=>{
+  const directory=mkdtempSync(join(tmpdir(),'slc-presenter-stress-'));
+  const path=join(directory,'presenter.sqlite'),mediaPath=join(directory,'background.mp4');
+  writeFileSync(mediaPath,'test media');
+  let library=openPresenterLibrary(path);
+  try{
+    for(let index=0;index<150;index++)library.saveLibraryOrganization({folders:[],collections:[{id:'media-service',name:`Service ${index}`,tab:'Media'}],folderAssignments:{},collectionAssignments:{'media-service':index%2?['Media:background']:[]}});
+    for(let index=0;index<100;index++)library.saveTheme({id:'stress-theme',name:'Stress Theme',contentType:'Song',canvasWidth:1920,canvasHeight:1080,background:{type:'solid',color:index%2?'#030712':'#111827'},elements:[{id:'lyrics',type:'dynamic',role:'lyrics',style:{fontSize:40+index}}]});
+    library.addMedia({id:'background',title:'Background',type:'Video',path:mediaPath,originalPath:mediaPath,mime:'video/mp4'});
+    library.close();library=openPresenterLibrary(path);
+    assert.equal(library.getLibraryOrganization().collections[0].name,'Service 149');
+    assert.deepEqual(library.getLibraryOrganization().collectionAssignments['media-service'],['Media:background']);
+    assert.equal(library.listThemes().filter(theme=>theme.id==='stress-theme').length,1);
+    assert.equal(library.listThemes().find(theme=>theme.id==='stress-theme').elements[0].style.fontSize,139);
+    assert.equal(library.listMedia().find(item=>item.id==='background').missing,false);
+  }finally{library.close();rmSync(directory,{recursive:true,force:true})}
+});
+
 test('persists manual Scripture and text presentations',()=>{
   const directory=mkdtempSync(join(tmpdir(),'slc-presenter-documents-'));
   const library=openPresenterLibrary(join(directory,'presenter.sqlite'));
@@ -67,6 +111,16 @@ test('creates, updates, and reopens complete services',()=>{
     const updated=library.saveService({id:created.id,name:'Sunday Celebration',items:[...created.items,{id:'scripture-1',title:'Genesis 1:1',type:'Scripture'}]});
     assert.equal(updated.items.length,2);
     assert.equal(library.getService(created.id).name,'Sunday Celebration');
+  }finally{library.close();rmSync(directory,{recursive:true,force:true})}
+});
+
+test('preserves per-output theme and background styling on service items',()=>{
+  const directory=mkdtempSync(join(tmpdir(),'slc-presenter-output-styles-'));
+  const library=openPresenterLibrary(join(directory,'presenter.sqlite'));
+  try{
+    const outputStyles={'output-1':{themeId:'full-screen',background:'default'},'output-2':{themeId:'lower-third',background:'transparent'}};
+    const saved=library.saveService({name:'Styled Service',items:[{id:'notice-1',title:'Welcome',type:'Presentation',slides:[{name:'Slide 1',text:'Welcome'}],outputStyles}]});
+    assert.deepEqual(library.getService(saved.id).items[0].outputStyles,outputStyles);
   }finally{library.close();rmSync(directory,{recursive:true,force:true})}
 });
 
@@ -144,6 +198,7 @@ test('stores independent image and video library records',()=>{
     writeFileSync(join(directory,'welcome.png'),'image bytes');
     const image=library.addMedia({id:'image-1',title:'Welcome',type:'Image',path:join(directory,'welcome.png'),originalPath:'C:/media/welcome.png',mime:'image/png'});
     const video=library.addMedia({id:'video-1',title:'Announcements',type:'Video',path:join(directory,'announcements.mp4'),originalPath:'C:/media/announcements.mp4',mime:'video/mp4'});
+    assert.equal(video.loop,1);
     assert.deepEqual(library.listMedia().map(item=>item.type),['Video','Image']);
     assert.deepEqual(library.listMedia().map(item=>item.missing),[true,false]);
     assert.equal(library.getMediaPath(image.id),join(directory,'welcome.png'));
@@ -171,12 +226,14 @@ test('creates a default theme and persists reusable theme layouts',()=>{
   const library=openPresenterLibrary(join(directory,'presenter.sqlite'));
   try{
     const defaults=library.listThemes();
-    assert.equal(defaults.length,1);assert.equal(defaults[0].isDefault,true);
-    assert.equal(defaults[0].canvasWidth,1920);assert.equal(defaults[0].background.type,'solid');
+    assert.equal(defaults.length,2);assert.equal(defaults.find(theme=>theme.id==='slc-default-theme').isDefault,true);
+    assert.equal(defaults.find(theme=>theme.id==='slc-default-theme').canvasWidth,1920);assert.equal(defaults.find(theme=>theme.id==='slc-default-theme').background.type,'solid');
+    const broadcast=defaults.find(theme=>theme.id==='slc-broadcast-lower-third');
+    assert.equal(broadcast.layoutType,'Lower Third');assert.equal(broadcast.background.type,'transparent');
     assert.equal(library.getThemeDefaults().songThemeId,'');
     const saved=library.saveTheme({name:'Broadcast Scripture',contentType:'Scripture',layoutType:'Lower Third',canvasWidth:1920,canvasHeight:1080,background:{type:'transparent'},elements:[{id:'verse',type:'dynamic',binding:'primary',x:120,y:790,width:1300,height:130,style:{fontSize:54,color:'#ffffff'}}]});
     assert.equal(saved.layoutType,'Lower Third');assert.equal(saved.background.type,'transparent');
-    assert.equal(library.listThemes().length,2);
+    assert.equal(library.listThemes().length,3);
     assert.equal(library.setThemeDefault('Scripture',saved.id).scriptureThemeId,saved.id);
     assert.equal(library.setThemeDefault('Presentation',saved.id).presentationThemeId,saved.id);
     assert.equal(library.setThemeDefault('General',saved.id).generalThemeId,saved.id);

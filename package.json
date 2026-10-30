@@ -1,6 +1,6 @@
 {
   "name": "slc-presenter",
-  "version": "0.1.8",
+  "version": "0.1.26",
   "private": true,
   "type": "module",
   "description": "Offline church presentation software",
@@ -27,11 +27,30 @@
     ],
     "nsis": {
       "oneClick": false,
+      "perMachine": true,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "SLC Presenter",
-      "uninstallDisplayName": "SLC Presenter"
+      "uninstallDisplayName": "SLC Presenter",
+      "include": "build/installer.nsh"
+    },
+    "mac": {
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "icon": "build/icon.icns",
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "extendInfo": {
+        "NSLocalNetworkUsageDescription": "SLC Presenter uses your local network to send authenticated presentation output to another computer.",
+        "NSDocumentsFolderUsageDescription": "SLC Presenter opens and saves service schedules that you choose."
+      }
+    },
+    "dmg": {
+      "title": "SLC Presenter ${version}",
+      "sign": false
     }
   },
   "scripts": {
@@ -41,7 +60,11 @@
     "desktop": "npm run build && electron .",
     "test": "node --test tests/*.test.js",
     "pack:win": "npm run build && electron-builder --win --x64 --dir",
-    "dist:win": "npm run build && electron-builder --win --x64 --publish never"
+    "dist:win": "npm run build && electron-builder --win --x64 --publish never",
+    "mac:icon": "bash scripts/create-mac-icon.sh",
+    "pack:mac": "npm run mac:icon && npm run build && electron-builder --mac --dir --publish never",
+    "dist:mac:x64": "npm run mac:icon && npm run build && electron-builder --mac dmg zip --x64 --publish never",
+    "dist:mac:arm64": "npm run mac:icon && npm run build && electron-builder --mac dmg zip --arm64 --publish never"
   },
   "dependencies": {
     "ffmpeg-static": "^5.3.0",

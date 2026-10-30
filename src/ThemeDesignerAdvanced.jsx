@@ -725,7 +725,6 @@ export default function ThemeDesignerAdvanced({
           <option>All</option>
           <option>Song</option>
           <option>Scripture</option>
-          <option>Presentation</option>
         </select>
         <select
           title="Theme layout purpose"

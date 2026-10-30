@@ -307,6 +307,7 @@ body,
 .presentation-scene.is-transparent { background: transparent !important; }
 .theme-background-video { z-index: 0; object-fit: cover !important; }
 .theme-element { position: absolute; padding: 0; white-space: pre-wrap; overflow: hidden; }
+.theme-text-content{display:block;width:100%;max-width:100%;white-space:pre-wrap;overflow-wrap:anywhere}
 .theme-shape { color: transparent !important; }
 .preview-heading { gap: 8px; }
 .preview-heading > label { margin-left: auto; display: flex; align-items: center; gap: 4px; color: #8997a8; font-size: 9px; }

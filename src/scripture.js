@@ -41,6 +41,24 @@ export function parseScriptureReference(input,books){
   return{state:'verses',book,chapter,verseStart,verseEnd};
 }
 
+export function suggestScriptureReferences(input,books,limit=8){
+  const raw=String(input??'').trim();
+  if(!raw)return[];
+  const match=raw.match(/^\s*((?:[1-3]\s*)?[a-z]+(?:\s+[a-z]+)*)\s*(.*)$/i);
+  if(!match)return[];
+  const bookQuery=match[1],tail=match[2].trim(),resolved=resolveBook(bookQuery,books);
+  if(!resolved){
+    const wanted=normalize(bookQuery).replace(/\s+/g,'');
+    return books.filter(item=>[item.book,...(aliases[normalize(item.book)]||[])].some(name=>normalize(name).replace(/\s+/g,'').startsWith(wanted))).slice(0,limit).map(item=>item.book);
+  }
+  const info=books.find(item=>item.book===resolved),chapterMatch=tail.match(/^(\d*)(?::\s*(\d*)?)?/),chapterText=chapterMatch?.[1]||'';
+  if(!chapterText)return Array.from({length:Math.min(info?.chapters||1,limit)},(_,index)=>`${resolved} ${index+1}`);
+  const chapter=Number(chapterText);
+  if(!chapter||chapter>(info?.chapters||chapter))return[];
+  if(tail.includes(':'))return[`${resolved} ${chapter}:${chapterMatch?.[2]||1}`];
+  return[`${resolved} ${chapter}`,`${resolved} ${chapter}:1`];
+}
+
 export function formatReference(book,chapter,verses=[]){
   if(!verses.length)return`${book} ${chapter}`;
   const numbers=verses.map(item=>item.verse).sort((a,b)=>a-b),first=numbers[0],last=numbers.at(-1),contiguous=numbers.every((number,index)=>!index||number===numbers[index-1]+1);

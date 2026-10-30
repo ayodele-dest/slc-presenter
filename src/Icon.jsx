@@ -14,7 +14,7 @@ const icons={
   chevronUp:ChevronUp,clear:X,close:X,collapse:ChevronUp,copy:Copy,
   down:ArrowDown,duplicate:Copy,edit:Pencil,expand:ChevronDown,eye:Eye,
   eyeOff:EyeOff,fileDown:FileDown,import:Import,library:BookOpen,
-  minus:Minus,more:MoreVertical,new:FilePlus2,open:FolderOpen,outputs:MonitorUp,
+  folder:FolderOpen,minus:Minus,more:MoreVertical,new:FilePlus2,open:FolderOpen,outputs:MonitorUp,
   play:Play,presentation:Presentation,reset:RotateCcw,remove:Trash2,
   save:Save,schedule:ListPlus,search:Search,serviceCheck:ClipboardCheck,
   settings:Settings,shape:Shapes,song:Music2,status:Circle,text:Type,
